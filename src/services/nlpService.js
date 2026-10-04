@@ -2,10 +2,10 @@ const NLP_API_URL =
   "https://cci-project.onrender.com/api/analyze";
 
 const MODEL_RESULTS_API_URL =
-  "http://localhost:8000/api/model-results";
+  "https://cci-project.onrender.com/api/model-results";
 
 const DATASET_EVALUATION_API_URL =
-  "http://localhost:8000/api/evaluate-dataset";
+  "https://cci-project.onrender.com/api/evaluate-dataset";
 
 
 // ============================================================
