@@ -1,14 +1,42 @@
-from transformers import pipeline
+import random
 import emoji
 
-# ============================================================
-# LOAD REAL PRETRAINED SENTIMENT MODEL
-# ============================================================
-
-sentiment_pipeline = pipeline(
-    "sentiment-analysis",
-    model="distilbert-base-uncased-finetuned-sst-2-english"
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix
 )
+
+# ============================================================
+# LAZY LOAD REAL PRETRAINED SENTIMENT MODEL
+# ============================================================
+# IMPORTANT:
+# The Hugging Face model is NOT loaded when FastAPI starts.
+# It is loaded only when sentiment analysis is actually needed.
+# This helps Render startup memory usage.
+
+sentiment_pipeline = None
+
+
+def get_sentiment_pipeline():
+    """
+    Load the real pretrained Hugging Face sentiment model
+    only when it is actually required.
+    """
+
+    global sentiment_pipeline
+
+    if sentiment_pipeline is None:
+        from transformers import pipeline
+
+        sentiment_pipeline = pipeline(
+            "sentiment-analysis",
+            model="distilbert-base-uncased-finetuned-sst-2-english"
+        )
+
+    return sentiment_pipeline
 
 
 # ============================================================
@@ -130,7 +158,9 @@ def format_sentiment_result(
 
 def analyze_text_only(text):
 
-    result = sentiment_pipeline(
+    pipeline_model = get_sentiment_pipeline()
+
+    result = pipeline_model(
         text,
         truncation=True
     )[0]
@@ -155,7 +185,7 @@ def analyze_text_emoji(text):
     )
 
     # Remove emojis from original text
-    clean_text = text
+    clean_text = str(text)
 
     for item in emojis:
 
@@ -174,7 +204,9 @@ def analyze_text_emoji(text):
             + " ".join(emoji_meanings)
         )
 
-    result = sentiment_pipeline(
+    pipeline_model = get_sentiment_pipeline()
+
+    result = pipeline_model(
         combined_text,
         truncation=True
     )[0]
@@ -184,7 +216,6 @@ def analyze_text_emoji(text):
         result
     )
 
-    # Add emoji information
     formatted_result["emojis"] = emojis
 
     formatted_result["emoji_meanings"] = (
@@ -205,6 +236,8 @@ def analyze_text_emoji_context(
     product=None,
     rating=None
 ):
+
+    text = str(text)
 
     emojis = extract_emojis(text)
 
@@ -262,7 +295,9 @@ def analyze_text_emoji_context(
             + context_text
         )
 
-    result = sentiment_pipeline(
+    pipeline_model = get_sentiment_pipeline()
+
+    result = pipeline_model(
         combined_text,
         truncation=True
     )[0]
@@ -271,10 +306,6 @@ def analyze_text_emoji_context(
         "Text + Emoji + Context",
         result
     )
-
-    # --------------------------------------------------------
-    # ADD ADDITIONAL INFORMATION
-    # --------------------------------------------------------
 
     formatted_result["emojis"] = emojis
 
@@ -325,21 +356,6 @@ def analyze_review(
 
 
 # ============================================================
-# UPLOADED DATASET NLP EVALUATION
-# ============================================================
-
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    confusion_matrix
-)
-
-import random
-
-
-# ============================================================
 # GROUND TRUTH NORMALIZATION
 # ============================================================
 
@@ -367,10 +383,6 @@ def normalize_ground_truth(
     if not text:
         return None
 
-    # --------------------------------------------------------
-    # TEXT LABELS
-    # --------------------------------------------------------
-
     positive_values = {
         "positive",
         "pos",
@@ -390,9 +402,6 @@ def normalize_ground_truth(
 
     column_lower = column_name.lower()
 
-    # Only treat 0/1 as binary labels when
-    # column clearly represents a label.
-
     if any(
         keyword in column_lower
         for keyword in [
@@ -409,10 +418,6 @@ def normalize_ground_truth(
         if text in negative_values:
             return "NEGATIVE"
 
-    # --------------------------------------------------------
-    # NUMERIC RATING
-    # --------------------------------------------------------
-
     try:
 
         number = float(text)
@@ -421,17 +426,12 @@ def normalize_ground_truth(
 
         return None
 
-    # Negative
     if 1 <= number <= 2:
-
         return "NEGATIVE"
 
-    # Positive
     if 4 <= number <= 5:
-
         return "POSITIVE"
 
-    # 3-star excluded
     return None
 
 
@@ -453,10 +453,7 @@ def find_dataset_column(
         for column in columns
     }
 
-    # --------------------------------------------------------
-    # EXACT MATCH
-    # --------------------------------------------------------
-
+    # Exact match
     for candidate in candidates:
 
         candidate_lower = (
@@ -469,10 +466,7 @@ def find_dataset_column(
                 candidate_lower
             ]
 
-    # --------------------------------------------------------
-    # PARTIAL MATCH
-    # --------------------------------------------------------
-
+    # Partial match
     for column in columns:
 
         column_lower = (
@@ -507,11 +501,9 @@ def convert_prediction_to_label(
     ).upper()
 
     if "POSITIVE" in label:
-
         return "POSITIVE"
 
     if "NEGATIVE" in label:
-
         return "NEGATIVE"
 
     return None
@@ -640,22 +632,7 @@ def evaluate_uploaded_dataset(
     Model 3:
         Text + Emoji + Context
 
-    Ground truth:
-
-        Sentiment/label column if available.
-
-        Otherwise rating:
-
-        1-2 -> NEGATIVE
-        4-5 -> POSITIVE
-        3   -> EXCLUDED
-
-    For large datasets:
-
-        Maximum evaluation sample = 500 reviews
-
-    The 500 reviews are selected randomly
-    using random seed 42 for reproducibility.
+    Maximum evaluation sample = 500 reviews.
     """
 
     # ========================================================
@@ -667,10 +644,6 @@ def evaluate_uploaded_dataset(
         columns = list(
             rows[0].keys()
         )
-
-    # --------------------------------------------------------
-    # REVIEW COLUMN
-    # --------------------------------------------------------
 
     if not review_column:
 
@@ -692,10 +665,6 @@ def evaluate_uploaded_dataset(
             ]
         )
 
-    # --------------------------------------------------------
-    # RATING COLUMN
-    # --------------------------------------------------------
-
     if not rating_column:
 
         rating_column = find_dataset_column(
@@ -708,10 +677,6 @@ def evaluate_uploaded_dataset(
                 "score"
             ]
         )
-
-    # --------------------------------------------------------
-    # LABEL COLUMN
-    # --------------------------------------------------------
 
     if not label_column:
 
@@ -727,10 +692,6 @@ def evaluate_uploaded_dataset(
             ]
         )
 
-    # --------------------------------------------------------
-    # BRAND COLUMN
-    # --------------------------------------------------------
-
     if not brand_column:
 
         brand_column = find_dataset_column(
@@ -740,10 +701,6 @@ def evaluate_uploaded_dataset(
                 "manufacturer"
             ]
         )
-
-    # --------------------------------------------------------
-    # PRODUCT COLUMN
-    # --------------------------------------------------------
 
     if not product_column:
 
@@ -757,10 +714,6 @@ def evaluate_uploaded_dataset(
             ]
         )
 
-    # --------------------------------------------------------
-    # VERIFIED PURCHASE COLUMN
-    # --------------------------------------------------------
-
     if not verified_column:
 
         verified_column = find_dataset_column(
@@ -772,10 +725,6 @@ def evaluate_uploaded_dataset(
                 "is_verified"
             ]
         )
-
-    # --------------------------------------------------------
-    # HELPFUL VOTES COLUMN
-    # --------------------------------------------------------
 
     if not helpful_column:
 
@@ -820,7 +769,6 @@ def evaluate_uploaded_dataset(
         )
 
         if review is None:
-
             continue
 
         review = str(
@@ -828,12 +776,7 @@ def evaluate_uploaded_dataset(
         ).strip()
 
         if not review:
-
             continue
-
-        # ----------------------------------------------------
-        # GROUND TRUTH
-        # ----------------------------------------------------
 
         ground_truth_value = (
             row.get(label_column)
@@ -850,12 +793,7 @@ def evaluate_uploaded_dataset(
             )
         )
 
-        # ----------------------------------------------------
-        # IGNORE 3-STAR / INVALID LABELS
-        # ----------------------------------------------------
-
         if ground_truth is None:
-
             continue
 
         evaluation_rows.append(
@@ -890,7 +828,6 @@ def evaluate_uploaded_dataset(
 
     if len(evaluation_rows) > SAMPLE_SIZE:
 
-        # Fixed seed makes the sample reproducible.
         random.seed(42)
 
         evaluation_rows = random.sample(
@@ -942,7 +879,6 @@ def evaluate_uploaded_dataset(
 
         # ====================================================
         # MODEL 1
-        # TEXT ONLY
         # ====================================================
 
         result_1 = analyze_text_only(
@@ -961,7 +897,6 @@ def evaluate_uploaded_dataset(
 
         # ====================================================
         # MODEL 2
-        # TEXT + EMOJI
         # ====================================================
 
         result_2 = analyze_text_emoji(
@@ -978,17 +913,12 @@ def evaluate_uploaded_dataset(
             prediction_2
         )
 
-        # ----------------------------------------------------
-        # EMOJI STATISTICS
-        # ----------------------------------------------------
-
         emojis = result_2.get(
             "emojis",
             []
         )
 
         if emojis:
-
             emoji_review_count += 1
 
         total_emoji_count += len(
@@ -997,7 +927,6 @@ def evaluate_uploaded_dataset(
 
         # ====================================================
         # MODEL 3
-        # TEXT + EMOJI + CONTEXT
         # ====================================================
 
         brand = (
@@ -1023,10 +952,6 @@ def evaluate_uploaded_dataset(
             if helpful_column
             else None
         )
-
-        # ----------------------------------------------------
-        # BUILD CONTEXT
-        # ----------------------------------------------------
 
         context_text = review
 
@@ -1054,15 +979,8 @@ def evaluate_uploaded_dataset(
                 f" Helpful votes: {helpful}"
             )
 
-        # ----------------------------------------------------
-        # IMPORTANT:
-        #
-        # Rating is NOT passed to Model 3 here.
-        #
-        # Rating is being used as the ground truth.
-        #
-        # Passing rating would cause target leakage.
-        # ----------------------------------------------------
+        # Rating is intentionally NOT passed
+        # to prevent target leakage.
 
         result_3 = analyze_text_emoji_context(
             context_text,
