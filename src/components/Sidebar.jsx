@@ -11,7 +11,8 @@ import {
   Settings,
   LogOut,
   Brain,
-  X
+  X,
+  Info
 } from "lucide-react";
 
 const menuItems = [
@@ -59,6 +60,11 @@ const menuItems = [
     name: "Settings",
     path: "/settings",
     icon: Settings
+  },
+  {
+    name: "About",
+    path: "/about",
+    icon: Info
   }
 ];
 

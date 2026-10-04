@@ -1,3 +1,4 @@
+import "./App.css";
 import {
   BrowserRouter,
   Routes,
@@ -25,6 +26,7 @@ import ProductComparison from "./pages/ProductComparison.jsx";
 import AnalysisHistory from "./pages/AnalysisHistory.jsx";
 import Profile from "./pages/Profile.jsx";
 import Settings from "./pages/Settings.jsx";
+import About from "./pages/About.jsx";
 
 // =====================================================
 // LAYOUT
@@ -193,6 +195,19 @@ function App() {
         />
 
         {/* =================================================
+            ABOUT
+        ================================================= */}
+
+        <Route
+          path="/about"
+          element={
+            <Layout>
+              <About />
+            </Layout>
+          }
+        />
+
+        {/* =================================================
             DEFAULT ROUTE
         ================================================= */}
 
@@ -226,4 +241,3 @@ function App() {
 }
 
 export default App;
-
