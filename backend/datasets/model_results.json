@@ -1,0 +1,54 @@
+{
+    "dataset": {
+        "name": "Amazon Reviews 2023 Electronics",
+        "evaluation_reviews": 4672
+    },
+    "models": {
+        "model_1": {
+            "name": "Text Only",
+            "total_reviews": 4672,
+            "accuracy": 80.63,
+            "precision": 98.71,
+            "recall": 78.85,
+            "f1_score": 87.67,
+            "confusion_matrix": {
+                "true_negative": 549,
+                "false_positive": 42,
+                "false_negative": 863,
+                "true_positive": 3218
+            }
+        },
+        "model_2": {
+            "name": "Text + Emoji",
+            "total_reviews": 4672,
+            "accuracy": 81.34,
+            "precision": 98.72,
+            "recall": 79.66,
+            "f1_score": 88.17,
+            "confusion_matrix": {
+                "true_negative": 549,
+                "false_positive": 42,
+                "false_negative": 830,
+                "true_positive": 3251
+            }
+        },
+        "model_3": {
+            "name": "Text + Emoji + Context",
+            "total_reviews": 4672,
+            "accuracy": 79.24,
+            "precision": 97.61,
+            "recall": 78.14,
+            "f1_score": 86.8,
+            "confusion_matrix": {
+                "true_negative": 513,
+                "false_positive": 78,
+                "false_negative": 892,
+                "true_positive": 3189
+            }
+        }
+    },
+    "emoji_statistics": {
+        "reviews_with_emojis": 74,
+        "total_detected_emojis": 134
+    }
+}
