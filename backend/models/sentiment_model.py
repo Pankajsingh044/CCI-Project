@@ -14,13 +14,10 @@ from sklearn.metrics import (
 # ============================================================
 # LIGHTWEIGHT SENTIMENT NLP ENGINE
 # ============================================================
-# IMPORTANT:
-# This version does NOT use Transformers or PyTorch.
-# It is designed to run on Render Free (512 MB RAM).
-#
-# The function names and response structure are preserved
-# so the existing FastAPI backend and React frontend continue
-# working without frontend changes.
+# Render Free friendly:
+# No Transformers
+# No PyTorch
+# No large ML model
 # ============================================================
 
 
@@ -63,7 +60,6 @@ POSITIVE_WORDS = {
     "quick": 1,
     "beautiful": 2,
     "powerful": 2,
-    "useful": 2,
     "convenient": 2,
     "durable": 2,
     "premium": 2,
@@ -207,15 +203,61 @@ EMOJI_MEANINGS = {
 
 
 # ============================================================
+# EMOJI EXTRACTION
+# ============================================================
+
+def extract_emojis(text):
+    """
+    Extract emojis present in the review.
+    """
+
+    emojis = []
+
+    if text is None:
+        return emojis
+
+    text = str(text)
+
+    for character in text:
+
+        if character in emoji.EMOJI_DATA:
+            emojis.append(character)
+
+    return emojis
+
+
+# ============================================================
+# EMOJI TO TEXT
+# ============================================================
+
+def emoji_to_text(emojis):
+    """
+    Convert detected emojis into predefined meanings.
+    """
+
+    meanings = []
+
+    for item in emojis:
+
+        if item in EMOJI_MEANINGS:
+            meanings.append(
+                EMOJI_MEANINGS[item]
+            )
+
+    return meanings
+
+
+# ============================================================
 # LIGHTWEIGHT SENTIMENT ANALYSIS
 # ============================================================
 
 def lightweight_sentiment(text):
     """
-    Lightweight NLP sentiment engine.
+    Lightweight sentiment engine.
 
-    Returns a structure compatible with the previous
-    Hugging Face sentiment output.
+    Returns:
+        label
+        score
     """
 
     if text is None:
@@ -224,18 +266,14 @@ def lightweight_sentiment(text):
     text = str(text).strip()
 
     if not text:
+
         return {
             "label": "NEUTRAL",
             "score": 0.50
         }
 
-    # --------------------------------------------------------
-    # Normalize
-    # --------------------------------------------------------
-
     lowered = text.lower()
 
-    # Keep apostrophes for negation detection.
     words = re.findall(
         r"[a-zA-Z]+(?:'[a-zA-Z]+)?",
         lowered
@@ -245,7 +283,7 @@ def lightweight_sentiment(text):
     negative_score = 0.0
 
     # --------------------------------------------------------
-    # Word-level sentiment
+    # WORD SENTIMENT
     # --------------------------------------------------------
 
     for index, word in enumerate(words):
@@ -254,7 +292,6 @@ def lightweight_sentiment(text):
 
         multiplier = 1.0
 
-        # Look at previous 3 words for negation/intensifier.
         previous_words = words[
             max(0, index - 3):index
         ]
@@ -280,7 +317,9 @@ def lightweight_sentiment(text):
             )
 
             if negated:
-                negative_score += value * 0.85
+                negative_score += (
+                    value * 0.85
+                )
             else:
                 positive_score += value
 
@@ -292,15 +331,19 @@ def lightweight_sentiment(text):
             )
 
             if negated:
-                positive_score += value * 0.85
+                positive_score += (
+                    value * 0.85
+                )
             else:
                 negative_score += value
 
     # --------------------------------------------------------
-    # Emoji sentiment
+    # EMOJI SENTIMENT
     # --------------------------------------------------------
 
-    detected_emojis = extract_emojis(text)
+    detected_emojis = extract_emojis(
+        text
+    )
 
     for item in detected_emojis:
 
@@ -331,7 +374,7 @@ def lightweight_sentiment(text):
             negative_score += 2
 
     # --------------------------------------------------------
-    # Punctuation / emphasis
+    # EXCLAMATION EMPHASIS
     # --------------------------------------------------------
 
     exclamation_count = text.count("!")
@@ -345,7 +388,7 @@ def lightweight_sentiment(text):
             negative_score += 0.5
 
     # --------------------------------------------------------
-    # Determine sentiment
+    # DETERMINE SENTIMENT
     # --------------------------------------------------------
 
     total_score = (
@@ -372,10 +415,7 @@ def lightweight_sentiment(text):
             + min(
                 0.44,
                 difference
-                / max(
-                    total_score,
-                    1
-                )
+                / max(total_score, 1)
                 * 0.44
             )
         )
@@ -403,10 +443,7 @@ def lightweight_sentiment(text):
             + min(
                 0.44,
                 difference
-                / max(
-                    total_score,
-                    1
-                )
+                / max(total_score, 1)
                 * 0.44
             )
         )
@@ -429,55 +466,6 @@ def lightweight_sentiment(text):
 
 
 # ============================================================
-# EMOJI EXTRACTION
-# ============================================================
-
-def extract_emojis(text):
-    """
-    Extract emojis present in the review.
-    """
-
-    emojis = []
-
-    if text is None:
-        return emojis
-
-    text = str(text)
-
-    for character in text:
-
-        if character in emoji.EMOJI_DATA:
-
-            emojis.append(
-                character
-            )
-
-    return emojis
-
-
-# ============================================================
-# EMOJI TO TEXT
-# ============================================================
-
-def emoji_to_text(emojis):
-    """
-    Convert detected emojis into predefined meanings.
-    """
-
-    meanings = []
-
-    for item in emojis:
-
-        if item in EMOJI_MEANINGS:
-
-            meanings.append(
-                EMOJI_MEANINGS[item]
-            )
-
-    return meanings
-
-
-# ============================================================
 # SENTIMENT RESULT FORMAT
 # ============================================================
 
@@ -486,7 +474,7 @@ def format_sentiment_result(
     result
 ):
     """
-    Create a consistent sentiment response.
+    Create consistent sentiment response.
     """
 
     return {
@@ -535,8 +523,9 @@ def analyze_text_emoji(text):
         emojis
     )
 
-    # Remove emojis from original text.
-    clean_text = str(text)
+    clean_text = str(
+        text if text is not None else ""
+    )
 
     for item in emojis:
 
@@ -545,7 +534,6 @@ def analyze_text_emoji(text):
             ""
         )
 
-    # Add emoji meanings to text.
     combined_text = (
         clean_text.strip()
     )
@@ -591,7 +579,9 @@ def analyze_text_emoji_context(
     rating=None
 ):
 
-    text = str(text)
+    text = str(
+        text if text is not None else ""
+    )
 
     emojis = extract_emojis(
         text
@@ -601,23 +591,29 @@ def analyze_text_emoji_context(
         emojis
     )
 
-    # --------------------------------------------------------
-    # BUILD CONTEXT
-    # --------------------------------------------------------
-
     context_parts = []
 
-    if brand:
+    if brand is not None:
 
-        context_parts.append(
-            f"Brand: {brand}"
-        )
+        brand_text = str(
+            brand
+        ).strip()
 
-    if product:
+        if brand_text:
+            context_parts.append(
+                f"Brand: {brand_text}"
+            )
 
-        context_parts.append(
-            f"Product: {product}"
-        )
+    if product is not None:
+
+        product_text = str(
+            product
+        ).strip()
+
+        if product_text:
+            context_parts.append(
+                f"Product: {product_text}"
+            )
 
     if rating is not None:
 
@@ -638,13 +634,7 @@ def analyze_text_emoji_context(
         context_parts
     )
 
-    # --------------------------------------------------------
-    # BUILD FINAL NLP INPUT
-    # --------------------------------------------------------
-
-    combined_text = (
-        text.strip()
-    )
+    combined_text = text.strip()
 
     if context_text:
 
@@ -721,7 +711,7 @@ def normalize_ground_truth(
     column_name=""
 ):
     """
-    Convert dataset ground-truth values into:
+    Convert dataset ground truth into:
 
     POSITIVE
     NEGATIVE
@@ -735,7 +725,9 @@ def normalize_ground_truth(
     if value is None:
         return None
 
-    text = str(value).strip().lower()
+    text = str(
+        value
+    ).strip().lower()
 
     if not text:
         return None
@@ -757,7 +749,11 @@ def normalize_ground_truth(
         "0"
     }
 
-    column_lower = column_name.lower()
+    column_lower = str(
+        column_name
+        if column_name is not None
+        else ""
+    ).lower()
 
     if any(
         keyword in column_lower
@@ -777,7 +773,9 @@ def normalize_ground_truth(
 
     try:
 
-        number = float(text)
+        number = float(
+            text
+        )
 
     except ValueError:
 
@@ -805,16 +803,22 @@ def find_dataset_column(
     and partial matching.
     """
 
+    if not columns:
+        return None
+
     normalized_columns = {
         str(column).strip().lower(): column
         for column in columns
+        if column is not None
     }
 
-    # Exact match.
+    # Exact match
     for candidate in candidates:
 
         candidate_lower = (
-            candidate.lower().strip()
+            str(candidate)
+            .lower()
+            .strip()
         )
 
         if candidate_lower in normalized_columns:
@@ -823,8 +827,11 @@ def find_dataset_column(
                 candidate_lower
             ]
 
-    # Partial match.
+    # Partial match
     for column in columns:
+
+        if column is None:
+            continue
 
         column_lower = (
             str(column)
@@ -834,7 +841,13 @@ def find_dataset_column(
 
         for candidate in candidates:
 
-            if candidate.lower() in column_lower:
+            candidate_lower = (
+                str(candidate)
+                .lower()
+                .strip()
+            )
+
+            if candidate_lower in column_lower:
 
                 return column
 
@@ -849,13 +862,30 @@ def convert_prediction_to_label(
     result
 ):
     """
-    Convert prediction into
-    POSITIVE / NEGATIVE.
+    Convert prediction into:
+
+    POSITIVE
+    NEGATIVE
+
+    NEUTRAL predictions return None.
     """
 
+    if not isinstance(
+        result,
+        dict
+    ):
+        return None
+
+    label = result.get(
+        "label"
+    )
+
+    if label is None:
+        return None
+
     label = str(
-        result["label"]
-    ).upper()
+        label
+    ).upper().strip()
 
     if "POSITIVE" in label:
         return "POSITIVE"
@@ -875,44 +905,93 @@ def calculate_binary_metrics(
     predicted
 ):
     """
-    Calculate:
+    Calculate binary classification metrics safely.
 
-    Accuracy
-    Precision
-    Recall
-    F1 Score
-    Confusion Matrix
+    Neutral/invalid predictions are excluded from
+    binary POSITIVE/NEGATIVE evaluation.
     """
 
-    accuracy = accuracy_score(
+    valid_actual = []
+    valid_predicted = []
+
+    for actual_value, predicted_value in zip(
         actual,
         predicted
+    ):
+
+        if actual_value not in {
+            "POSITIVE",
+            "NEGATIVE"
+        }:
+            continue
+
+        if predicted_value not in {
+            "POSITIVE",
+            "NEGATIVE"
+        }:
+            continue
+
+        valid_actual.append(
+            actual_value
+        )
+
+        valid_predicted.append(
+            predicted_value
+        )
+
+    # --------------------------------------------------------
+    # No valid predictions
+    # --------------------------------------------------------
+
+    if not valid_actual:
+
+        return {
+            "accuracy": 0,
+            "precision": 0,
+            "recall": 0,
+            "f1_score": 0,
+            "evaluated_reviews": 0,
+            "confusion_matrix": {
+                "true_negative": 0,
+                "false_positive": 0,
+                "false_negative": 0,
+                "true_positive": 0
+            }
+        }
+
+    # --------------------------------------------------------
+    # Calculate metrics
+    # --------------------------------------------------------
+
+    accuracy = accuracy_score(
+        valid_actual,
+        valid_predicted
     )
 
     precision = precision_score(
-        actual,
-        predicted,
+        valid_actual,
+        valid_predicted,
         pos_label="POSITIVE",
         zero_division=0
     )
 
     recall = recall_score(
-        actual,
-        predicted,
+        valid_actual,
+        valid_predicted,
         pos_label="POSITIVE",
         zero_division=0
     )
 
     f1 = f1_score(
-        actual,
-        predicted,
+        valid_actual,
+        valid_predicted,
         pos_label="POSITIVE",
         zero_division=0
     )
 
     matrix = confusion_matrix(
-        actual,
-        predicted,
+        valid_actual,
+        valid_predicted,
         labels=[
             "NEGATIVE",
             "POSITIVE"
@@ -939,6 +1018,10 @@ def calculate_binary_metrics(
         "f1_score": round(
             float(f1) * 100,
             2
+        ),
+
+        "evaluated_reviews": len(
+            valid_actual
         ),
 
         "confusion_matrix": {
@@ -981,27 +1064,36 @@ def evaluate_uploaded_dataset(
     Run CCI's three NLP analysis approaches
     on an uploaded dataset.
 
-    Model 1:
-        Text Only
-
-    Model 2:
-        Text + Emoji
-
-    Model 3:
-        Text + Emoji + Context
-
     Maximum evaluation sample = 500 reviews.
     """
 
     # ========================================================
-    # AUTOMATIC COLUMN DETECTION
+    # SAFETY CHECKS
     # ========================================================
 
+    if rows is None:
+        rows = []
+
+    if columns is None:
+        columns = []
+
+    # Remove invalid column names
+    columns = [
+        column
+        for column in columns
+        if column is not None
+    ]
+
+    # If columns are missing, detect them from rows
     if not columns and rows:
 
         columns = list(
             rows[0].keys()
         )
+
+    # ========================================================
+    # AUTOMATIC COLUMN DETECTION
+    # ========================================================
 
     if not review_column:
 
@@ -1122,6 +1214,12 @@ def evaluate_uploaded_dataset(
 
     for row in rows:
 
+        if not isinstance(
+            row,
+            dict
+        ):
+            continue
+
         review = row.get(
             review_column
         )
@@ -1136,19 +1234,23 @@ def evaluate_uploaded_dataset(
         if not review:
             continue
 
-        ground_truth_value = (
-            row.get(label_column)
-            if label_column
-            else row.get(rating_column)
-        )
+        if label_column:
 
-        ground_truth = (
-            normalize_ground_truth(
-                ground_truth_value,
+            ground_truth_value = row.get(
                 label_column
-                or rating_column
-                or ""
             )
+
+        else:
+
+            ground_truth_value = row.get(
+                rating_column
+            )
+
+        ground_truth = normalize_ground_truth(
+            ground_truth_value,
+            label_column
+            or rating_column
+            or ""
         )
 
         if ground_truth is None:
@@ -1175,7 +1277,7 @@ def evaluate_uploaded_dataset(
         )
 
     # ========================================================
-    # RANDOM 500-REVIEW SAMPLE
+    # RANDOM SAMPLE
     # ========================================================
 
     SAMPLE_SIZE = 500
@@ -1206,7 +1308,7 @@ def evaluate_uploaded_dataset(
         )
 
     # ========================================================
-    # RUN THREE MODELS
+    # MODEL STORAGE
     # ========================================================
 
     actual_labels = []
@@ -1222,7 +1324,7 @@ def evaluate_uploaded_dataset(
     total_emoji_count = 0
 
     # ========================================================
-    # PROCESS EACH SAMPLE REVIEW
+    # PROCESS EACH REVIEW
     # ========================================================
 
     for item in evaluation_rows:
@@ -1313,17 +1415,29 @@ def evaluate_uploaded_dataset(
 
         context_text = review
 
-        if brand:
+        if brand is not None:
 
-            context_text += (
-                f" Brand: {brand}"
-            )
+            brand_text = str(
+                brand
+            ).strip()
 
-        if product:
+            if brand_text:
 
-            context_text += (
-                f" Product: {product}"
-            )
+                context_text += (
+                    f" Brand: {brand_text}"
+                )
+
+        if product is not None:
+
+            product_text = str(
+                product
+            ).strip()
+
+            if product_text:
+
+                context_text += (
+                    f" Product: {product_text}"
+                )
 
         if verified is not None:
 
@@ -1337,8 +1451,9 @@ def evaluate_uploaded_dataset(
                 f" Helpful votes: {helpful}"
             )
 
-        # Rating intentionally NOT passed
-        # to prevent target leakage.
+        # IMPORTANT:
+        # Rating is NOT passed to Model 3.
+        # This prevents target leakage.
 
         result_3 = analyze_text_emoji_context(
             context_text,
