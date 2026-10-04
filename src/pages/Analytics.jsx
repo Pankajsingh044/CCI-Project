@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const ANALYTICS_API_URL = "http://127.0.0.1:8000/api/analytics";
+const ANALYTICS_API_URL = "https://cci-project.onrender.com/api/analytics";
 
 import {
   BarChart3,

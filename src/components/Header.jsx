@@ -18,10 +18,10 @@ import { getDataset } from "../services/datasetStorage";
 // =====================================================
 
 const ANALYTICS_API_URL =
-  "http://127.0.0.1:8000/api/analytics";
+  "https://cci-project.onrender.com/api/analytics";
 
 const HISTORY_API_URL =
-  "http://127.0.0.1:8000/api/analysis-history";
+  "https://cci-project.onrender.com/api/analysis-history";
 
 // =====================================================
 // PROFILE IMAGE STORAGE KEY

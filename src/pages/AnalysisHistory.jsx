@@ -11,7 +11,7 @@ import {
   FileText,
 } from "lucide-react";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://cci-project.onrender.com";
 
 function AnalysisHistory() {
   const [history, setHistory] = useState([]);

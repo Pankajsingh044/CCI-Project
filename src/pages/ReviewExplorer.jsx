@@ -12,7 +12,7 @@ import {
 
 import { analyzeReviewWithNLP } from "../services/nlpService";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://cci-project.onrender.com";
 
 const brands = [
   "Apple",

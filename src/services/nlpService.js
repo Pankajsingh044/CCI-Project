@@ -1,5 +1,5 @@
 const NLP_API_URL =
-  "http://127.0.0.1:8000/api/analyze";
+  "https://cci-project.onrender.com/api/analyze";
 
 const MODEL_RESULTS_API_URL =
   "http://localhost:8000/api/model-results";
