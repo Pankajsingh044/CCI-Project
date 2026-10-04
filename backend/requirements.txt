@@ -8,6 +8,4 @@ pydantic
 pandas
 numpy
 scikit-learn
-transformers
-torch
 emoji

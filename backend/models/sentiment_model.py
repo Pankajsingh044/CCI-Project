@@ -1,4 +1,5 @@
 import random
+import re
 import emoji
 
 from sklearn.metrics import (
@@ -9,34 +10,159 @@ from sklearn.metrics import (
     confusion_matrix
 )
 
+
 # ============================================================
-# LAZY LOAD REAL PRETRAINED SENTIMENT MODEL
+# LIGHTWEIGHT SENTIMENT NLP ENGINE
 # ============================================================
 # IMPORTANT:
-# The Hugging Face model is NOT loaded when FastAPI starts.
-# It is loaded only when sentiment analysis is actually needed.
-# This helps Render startup memory usage.
+# This version does NOT use Transformers or PyTorch.
+# It is designed to run on Render Free (512 MB RAM).
+#
+# The function names and response structure are preserved
+# so the existing FastAPI backend and React frontend continue
+# working without frontend changes.
+# ============================================================
 
-sentiment_pipeline = None
+
+POSITIVE_WORDS = {
+    "amazing": 3,
+    "awesome": 3,
+    "excellent": 3,
+    "fantastic": 3,
+    "perfect": 3,
+    "wonderful": 3,
+    "brilliant": 3,
+    "love": 3,
+    "loved": 3,
+    "best": 3,
+    "great": 2,
+    "good": 2,
+    "nice": 2,
+    "happy": 2,
+    "satisfied": 2,
+    "satisfaction": 2,
+    "recommend": 2,
+    "recommended": 2,
+    "useful": 2,
+    "helpful": 2,
+    "fast": 2,
+    "smooth": 2,
+    "easy": 2,
+    "comfortable": 2,
+    "quality": 2,
+    "worth": 2,
+    "value": 2,
+    "impressive": 2,
+    "impressed": 2,
+    "enjoy": 2,
+    "enjoyed": 2,
+    "like": 2,
+    "liked": 2,
+    "reliable": 2,
+    "clear": 1,
+    "quick": 1,
+    "beautiful": 2,
+    "powerful": 2,
+    "useful": 2,
+    "convenient": 2,
+    "durable": 2,
+    "premium": 2,
+    "super": 2,
+    "worthwhile": 2,
+    "working": 1,
+    "works": 1,
+    "win": 1,
+    "winner": 2
+}
 
 
-def get_sentiment_pipeline():
-    """
-    Load the real pretrained Hugging Face sentiment model
-    only when it is actually required.
-    """
+NEGATIVE_WORDS = {
+    "bad": 3,
+    "worst": 3,
+    "terrible": 3,
+    "horrible": 3,
+    "awful": 3,
+    "hate": 3,
+    "hated": 3,
+    "disappointed": 3,
+    "disappointing": 3,
+    "poor": 2,
+    "useless": 3,
+    "waste": 3,
+    "broken": 3,
+    "failure": 3,
+    "failed": 3,
+    "fail": 3,
+    "problem": 2,
+    "problems": 2,
+    "issue": 2,
+    "issues": 2,
+    "slow": 2,
+    "lag": 2,
+    "laggy": 2,
+    "expensive": 2,
+    "cheap": 1,
+    "difficult": 2,
+    "hard": 1,
+    "uncomfortable": 2,
+    "unreliable": 2,
+    "damage": 3,
+    "damaged": 3,
+    "defective": 3,
+    "defect": 3,
+    "return": 2,
+    "returned": 2,
+    "refund": 2,
+    "complaint": 2,
+    "complaints": 2,
+    "annoying": 2,
+    "annoyed": 2,
+    "angry": 3,
+    "sad": 2,
+    "regret": 2,
+    "regretted": 2,
+    "missing": 2,
+    "crash": 3,
+    "crashed": 3,
+    "overheating": 3,
+    "overheat": 3,
+    "noise": 2,
+    "noisy": 2
+}
 
-    global sentiment_pipeline
 
-    if sentiment_pipeline is None:
-        from transformers import pipeline
+NEGATION_WORDS = {
+    "not",
+    "no",
+    "never",
+    "neither",
+    "nor",
+    "hardly",
+    "dont",
+    "don't",
+    "isnt",
+    "isn't",
+    "wasnt",
+    "wasn't",
+    "cant",
+    "can't",
+    "couldnt",
+    "couldn't",
+    "wont",
+    "won't"
+}
 
-        sentiment_pipeline = pipeline(
-            "sentiment-analysis",
-            model="distilbert-base-uncased-finetuned-sst-2-english"
-        )
 
-    return sentiment_pipeline
+INTENSIFIERS = {
+    "very": 1.4,
+    "really": 1.3,
+    "extremely": 1.6,
+    "absolutely": 1.6,
+    "so": 1.2,
+    "too": 1.2,
+    "highly": 1.4,
+    "super": 1.4
+}
 
 
 # ============================================================
@@ -81,6 +207,228 @@ EMOJI_MEANINGS = {
 
 
 # ============================================================
+# LIGHTWEIGHT SENTIMENT ANALYSIS
+# ============================================================
+
+def lightweight_sentiment(text):
+    """
+    Lightweight NLP sentiment engine.
+
+    Returns a structure compatible with the previous
+    Hugging Face sentiment output.
+    """
+
+    if text is None:
+        text = ""
+
+    text = str(text).strip()
+
+    if not text:
+        return {
+            "label": "NEUTRAL",
+            "score": 0.50
+        }
+
+    # --------------------------------------------------------
+    # Normalize
+    # --------------------------------------------------------
+
+    lowered = text.lower()
+
+    # Keep apostrophes for negation detection.
+    words = re.findall(
+        r"[a-zA-Z]+(?:'[a-zA-Z]+)?",
+        lowered
+    )
+
+    positive_score = 0.0
+    negative_score = 0.0
+
+    # --------------------------------------------------------
+    # Word-level sentiment
+    # --------------------------------------------------------
+
+    for index, word in enumerate(words):
+
+        word_clean = word.lower()
+
+        multiplier = 1.0
+
+        # Look at previous 3 words for negation/intensifier.
+        previous_words = words[
+            max(0, index - 3):index
+        ]
+
+        negated = any(
+            previous in NEGATION_WORDS
+            for previous in previous_words
+        )
+
+        for previous in previous_words:
+
+            if previous in INTENSIFIERS:
+
+                multiplier *= INTENSIFIERS[
+                    previous
+                ]
+
+        if word_clean in POSITIVE_WORDS:
+
+            value = (
+                POSITIVE_WORDS[word_clean]
+                * multiplier
+            )
+
+            if negated:
+                negative_score += value * 0.85
+            else:
+                positive_score += value
+
+        elif word_clean in NEGATIVE_WORDS:
+
+            value = (
+                NEGATIVE_WORDS[word_clean]
+                * multiplier
+            )
+
+            if negated:
+                positive_score += value * 0.85
+            else:
+                negative_score += value
+
+    # --------------------------------------------------------
+    # Emoji sentiment
+    # --------------------------------------------------------
+
+    detected_emojis = extract_emojis(text)
+
+    for item in detected_emojis:
+
+        meaning = EMOJI_MEANINGS.get(
+            item,
+            ""
+        )
+
+        if meaning in {
+            "happy",
+            "love",
+            "positive",
+            "excellent",
+            "laughing"
+        }:
+
+            positive_score += 2
+
+        elif meaning in {
+            "sad",
+            "very sad",
+            "disappointed",
+            "angry",
+            "negative",
+            "annoyed"
+        }:
+
+            negative_score += 2
+
+    # --------------------------------------------------------
+    # Punctuation / emphasis
+    # --------------------------------------------------------
+
+    exclamation_count = text.count("!")
+
+    if exclamation_count >= 2:
+
+        if positive_score > negative_score:
+            positive_score += 0.5
+
+        elif negative_score > positive_score:
+            negative_score += 0.5
+
+    # --------------------------------------------------------
+    # Determine sentiment
+    # --------------------------------------------------------
+
+    total_score = (
+        positive_score
+        + negative_score
+    )
+
+    if total_score == 0:
+
+        return {
+            "label": "NEUTRAL",
+            "score": 0.50
+        }
+
+    if positive_score > negative_score:
+
+        difference = (
+            positive_score
+            - negative_score
+        )
+
+        confidence = (
+            0.55
+            + min(
+                0.44,
+                difference
+                / max(
+                    total_score,
+                    1
+                )
+                * 0.44
+            )
+        )
+
+        return {
+            "label": "POSITIVE",
+            "score": min(
+                0.99,
+                round(
+                    confidence,
+                    4
+                )
+            )
+        }
+
+    if negative_score > positive_score:
+
+        difference = (
+            negative_score
+            - positive_score
+        )
+
+        confidence = (
+            0.55
+            + min(
+                0.44,
+                difference
+                / max(
+                    total_score,
+                    1
+                )
+                * 0.44
+            )
+        )
+
+        return {
+            "label": "NEGATIVE",
+            "score": min(
+                0.99,
+                round(
+                    confidence,
+                    4
+                )
+            )
+        }
+
+    return {
+        "label": "NEUTRAL",
+        "score": 0.50
+    }
+
+
+# ============================================================
 # EMOJI EXTRACTION
 # ============================================================
 
@@ -97,8 +445,12 @@ def extract_emojis(text):
     text = str(text)
 
     for character in text:
+
         if character in emoji.EMOJI_DATA:
-            emojis.append(character)
+
+            emojis.append(
+                character
+            )
 
     return emojis
 
@@ -117,6 +469,7 @@ def emoji_to_text(emojis):
     for item in emojis:
 
         if item in EMOJI_MEANINGS:
+
             meanings.append(
                 EMOJI_MEANINGS[item]
             )
@@ -133,8 +486,7 @@ def format_sentiment_result(
     result
 ):
     """
-    Create a consistent sentiment response
-    for all three analysis approaches.
+    Create a consistent sentiment response.
     """
 
     return {
@@ -158,12 +510,9 @@ def format_sentiment_result(
 
 def analyze_text_only(text):
 
-    pipeline_model = get_sentiment_pipeline()
-
-    result = pipeline_model(
-        text,
-        truncation=True
-    )[0]
+    result = lightweight_sentiment(
+        text
+    )
 
     return format_sentiment_result(
         "Text Only",
@@ -178,13 +527,15 @@ def analyze_text_only(text):
 
 def analyze_text_emoji(text):
 
-    emojis = extract_emojis(text)
+    emojis = extract_emojis(
+        text
+    )
 
     emoji_meanings = emoji_to_text(
         emojis
     )
 
-    # Remove emojis from original text
+    # Remove emojis from original text.
     clean_text = str(text)
 
     for item in emojis:
@@ -194,26 +545,29 @@ def analyze_text_emoji(text):
             ""
         )
 
-    # Add emoji meanings to the text
-    combined_text = clean_text.strip()
+    # Add emoji meanings to text.
+    combined_text = (
+        clean_text.strip()
+    )
 
     if emoji_meanings:
 
         combined_text += (
             " "
-            + " ".join(emoji_meanings)
+            + " ".join(
+                emoji_meanings
+            )
         )
 
-    pipeline_model = get_sentiment_pipeline()
+    result = lightweight_sentiment(
+        combined_text
+    )
 
-    result = pipeline_model(
-        combined_text,
-        truncation=True
-    )[0]
-
-    formatted_result = format_sentiment_result(
-        "Text + Emoji",
-        result
+    formatted_result = (
+        format_sentiment_result(
+            "Text + Emoji",
+            result
+        )
     )
 
     formatted_result["emojis"] = emojis
@@ -239,7 +593,9 @@ def analyze_text_emoji_context(
 
     text = str(text)
 
-    emojis = extract_emojis(text)
+    emojis = extract_emojis(
+        text
+    )
 
     emoji_meanings = emoji_to_text(
         emojis
@@ -286,7 +642,9 @@ def analyze_text_emoji_context(
     # BUILD FINAL NLP INPUT
     # --------------------------------------------------------
 
-    combined_text = text.strip()
+    combined_text = (
+        text.strip()
+    )
 
     if context_text:
 
@@ -295,16 +653,15 @@ def analyze_text_emoji_context(
             + context_text
         )
 
-    pipeline_model = get_sentiment_pipeline()
+    result = lightweight_sentiment(
+        combined_text
+    )
 
-    result = pipeline_model(
-        combined_text,
-        truncation=True
-    )[0]
-
-    formatted_result = format_sentiment_result(
-        "Text + Emoji + Context",
-        result
+    formatted_result = (
+        format_sentiment_result(
+            "Text + Emoji + Context",
+            result
+        )
     )
 
     formatted_result["emojis"] = emojis
@@ -453,7 +810,7 @@ def find_dataset_column(
         for column in columns
     }
 
-    # Exact match
+    # Exact match.
     for candidate in candidates:
 
         candidate_lower = (
@@ -466,7 +823,7 @@ def find_dataset_column(
                 candidate_lower
             ]
 
-    # Partial match
+    # Partial match.
     for column in columns:
 
         column_lower = (
@@ -492,7 +849,7 @@ def convert_prediction_to_label(
     result
 ):
     """
-    Convert Hugging Face prediction into
+    Convert prediction into
     POSITIVE / NEGATIVE.
     """
 
@@ -621,7 +978,8 @@ def evaluate_uploaded_dataset(
     helpful_column=None
 ):
     """
-    Run CCI's three NLP models on an uploaded dataset.
+    Run CCI's three NLP analysis approaches
+    on an uploaded dataset.
 
     Model 1:
         Text Only
@@ -979,7 +1337,7 @@ def evaluate_uploaded_dataset(
                 f" Helpful votes: {helpful}"
             )
 
-        # Rating is intentionally NOT passed
+        # Rating intentionally NOT passed
         # to prevent target leakage.
 
         result_3 = analyze_text_emoji_context(
