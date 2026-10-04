@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+
 import json
 import os
 import re
@@ -34,12 +35,10 @@ from models.sentiment_model import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    # Connect to MongoDB when FastAPI starts
     await connect_to_mongodb()
 
     yield
 
-    # Close MongoDB when FastAPI stops
     await close_mongodb_connection()
 
 
@@ -61,6 +60,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
+
+    # Main allowed origins
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -68,9 +69,17 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "https://cci-project-tau.vercel.app"
     ],
+
+    # Allow Vercel preview/deployment URLs also
+    allow_origin_regex=r"https://.*\.vercel\.app",
+
     allow_credentials=True,
+
+    # Allow all HTTP methods
     allow_methods=["*"],
-    allow_headers=["*"],
+
+    # Allow all request headers
+    allow_headers=["*"]
 )
 
 
@@ -127,7 +136,7 @@ class SaveHistoryRequest(BaseModel):
 
 
 # ============================================================
-# DATASET EVALUATION REQUEST DATA STRUCTURE
+# DATASET EVALUATION REQUEST
 # ============================================================
 
 class DatasetEvaluationRequest(BaseModel):
@@ -144,7 +153,7 @@ class DatasetEvaluationRequest(BaseModel):
 
 
 # ============================================================
-# SIGNUP REQUEST DATA STRUCTURE
+# SIGNUP REQUEST
 # ============================================================
 
 class SignupRequest(BaseModel):
@@ -155,7 +164,7 @@ class SignupRequest(BaseModel):
 
 
 # ============================================================
-# LOGIN REQUEST DATA STRUCTURE
+# LOGIN REQUEST
 # ============================================================
 
 class LoginRequest(BaseModel):
@@ -205,28 +214,24 @@ async def signup(request: SignupRequest):
         password = request.password
 
         if not name:
-
             raise HTTPException(
                 status_code=400,
                 detail="Name is required"
             )
 
         if not email:
-
             raise HTTPException(
                 status_code=400,
                 detail="Email is required"
             )
 
         if not password:
-
             raise HTTPException(
                 status_code=400,
                 detail="Password is required"
             )
 
         if len(password) < 6:
-
             raise HTTPException(
                 status_code=400,
                 detail="Password must be at least 6 characters"
@@ -239,7 +244,6 @@ async def signup(request: SignupRequest):
         )
 
         if existing_user:
-
             raise HTTPException(
                 status_code=400,
                 detail="User with this email already exists"
@@ -266,7 +270,6 @@ async def signup(request: SignupRequest):
         }
 
     except HTTPException:
-
         raise
 
     except Exception as error:
@@ -290,14 +293,12 @@ async def login(request: LoginRequest):
         password = request.password
 
         if not email:
-
             raise HTTPException(
                 status_code=400,
                 detail="Email is required"
             )
 
         if not password:
-
             raise HTTPException(
                 status_code=400,
                 detail="Password is required"
@@ -310,7 +311,6 @@ async def login(request: LoginRequest):
         )
 
         if not user:
-
             raise HTTPException(
                 status_code=401,
                 detail="Invalid email or password"
@@ -322,7 +322,6 @@ async def login(request: LoginRequest):
         )
 
         if not password_is_valid:
-
             raise HTTPException(
                 status_code=401,
                 detail="Invalid email or password"
@@ -339,7 +338,6 @@ async def login(request: LoginRequest):
         }
 
     except HTTPException:
-
         raise
 
     except Exception as error:
@@ -351,7 +349,7 @@ async def login(request: LoginRequest):
 
 
 # ============================================================
-# NLP REVIEW ANALYSIS ENDPOINT
+# NLP REVIEW ANALYSIS
 # ============================================================
 
 @app.post("/api/analyze")
@@ -445,7 +443,6 @@ async def get_reviews(
         query = {}
 
         if userEmail:
-
             query["userEmail"] = userEmail.strip().lower()
 
         cursor = reviews_collection.find(
@@ -509,7 +506,7 @@ async def get_reviews(
 
 
 # ============================================================
-# SAVE ANALYSIS HISTORY TO MONGODB
+# SAVE ANALYSIS HISTORY
 # ============================================================
 
 @app.post("/api/analysis-history")
@@ -568,7 +565,6 @@ async def get_analysis_history(
         query = {}
 
         if userEmail:
-
             query["userEmail"] = userEmail.strip().lower()
 
         cursor = analysis_history_collection.find(
@@ -634,7 +630,6 @@ async def delete_analysis_history(
 
     try:
 
-        # Validate MongoDB ObjectId
         if not ObjectId.is_valid(history_id):
 
             raise HTTPException(
@@ -642,15 +637,15 @@ async def delete_analysis_history(
                 detail="Invalid analysis history ID"
             )
 
-        # Find the analysis history
         query = {
             "_id": ObjectId(history_id)
         }
 
-        # Keep deletion limited to the logged-in user
         if userEmail:
 
-            query["userEmail"] = userEmail.strip().lower()
+            query["userEmail"] = (
+                userEmail.strip().lower()
+            )
 
         history_item = await analysis_history_collection.find_one(
             query
@@ -663,23 +658,24 @@ async def delete_analysis_history(
                 detail="Analysis history not found"
             )
 
-        # Delete analysis history
         history_result = await analysis_history_collection.delete_one(
             query
         )
 
-        # Get linked review ID
-        review_id = history_item.get("reviewId")
+        review_id = history_item.get(
+            "reviewId"
+        )
 
         review_deleted = 0
 
-        # Delete linked review
         if review_id and ObjectId.is_valid(
             str(review_id)
         ):
 
             review_query = {
-                "_id": ObjectId(str(review_id))
+                "_id": ObjectId(
+                    str(review_id)
+                )
             }
 
             if userEmail:
@@ -692,7 +688,9 @@ async def delete_analysis_history(
                 review_query
             )
 
-            review_deleted = review_result.deleted_count
+            review_deleted = (
+                review_result.deleted_count
+            )
 
         return {
             "success": True,
@@ -702,7 +700,6 @@ async def delete_analysis_history(
         }
 
     except HTTPException:
-
         raise
 
     except Exception as error:
@@ -726,19 +723,16 @@ async def clear_all_analysis_history(
 
         history_query = {}
 
-        # Delete only current user's history
         if userEmail:
 
             history_query["userEmail"] = (
                 userEmail.strip().lower()
             )
 
-        # Delete all analysis history
         history_result = await analysis_history_collection.delete_many(
             history_query
         )
 
-        # Delete saved reviews belonging to same user
         review_query = {}
 
         if userEmail:
@@ -774,6 +768,7 @@ EMOJI_PATTERN = re.compile(
     r"[\U0001F300-\U0001FAFF\u2600-\u27BF]"
 )
 
+
 SENTIMENT_KEYS = [
     "sentiment",
     "predicted_sentiment",
@@ -788,19 +783,22 @@ SENTIMENT_KEYS = [
 ]
 
 
-def _find_nested_value(data, possible_keys):
-    """
-    Search a saved NLP result recursively for one of the
-    known sentiment-related keys.
-    """
+def _find_nested_value(
+    data,
+    possible_keys
+):
+
     if not isinstance(data, dict):
         return None
 
     for key in possible_keys:
+
         if key in data and data[key] is not None:
+
             value = data[key]
 
             if isinstance(value, dict):
+
                 nested = _find_nested_value(
                     value,
                     possible_keys
@@ -817,14 +815,18 @@ def _find_nested_value(data, possible_keys):
                     "class",
                     "category"
                 ]:
+
                     if (
-                        child_key in value and
-                        value[child_key] is not None
+                        child_key in value
+                        and value[child_key] is not None
                     ):
+
                         return value[child_key]
 
             elif isinstance(value, list):
+
                 for item in value:
+
                     nested = _find_nested_value(
                         item,
                         possible_keys
@@ -834,10 +836,13 @@ def _find_nested_value(data, possible_keys):
                         return nested
 
             else:
+
                 return value
 
     for value in data.values():
+
         if isinstance(value, dict):
+
             nested = _find_nested_value(
                 value,
                 possible_keys
@@ -850,14 +855,12 @@ def _find_nested_value(data, possible_keys):
 
 
 def _normalize_sentiment(value):
-    """
-    Normalize common NLP sentiment labels without
-    inventing a sentiment when the NLP result has none.
-    """
+
     if value is None:
         return None
 
     if isinstance(value, dict):
+
         for key in [
             "label",
             "sentiment",
@@ -867,7 +870,9 @@ def _normalize_sentiment(value):
             "category",
             "text"
         ]:
+
             if key in value:
+
                 return _normalize_sentiment(
                     value[key]
                 )
@@ -889,6 +894,7 @@ def _normalize_sentiment(value):
             "favourable"
         ]
     ):
+
         return "Positive"
 
     if any(
@@ -901,6 +907,7 @@ def _normalize_sentiment(value):
             "unfavourable"
         ]
     ):
+
         return "Negative"
 
     if any(
@@ -910,24 +917,26 @@ def _normalize_sentiment(value):
             "neu"
         ]
     ):
+
         return "Neutral"
 
     return None
 
 
-def _extract_review_sentiment(nlp_results):
-    """
-    Prefer Model 3 because it represents the complete
-    Text + Emoji + Context pipeline. If Model 3 does not
-    contain a recognizable sentiment label, search the
-    remaining saved NLP result structure.
-    """
-    if not isinstance(nlp_results, dict):
+def _extract_review_sentiment(
+    nlp_results
+):
+
+    if not isinstance(
+        nlp_results,
+        dict
+    ):
+
         return None
 
     model3 = (
-        nlp_results.get("model_3") or
-        nlp_results.get("model3")
+        nlp_results.get("model_3")
+        or nlp_results.get("model3")
     )
 
     sentiment = _normalize_sentiment(
@@ -951,14 +960,21 @@ def _extract_review_sentiment(nlp_results):
 
 
 def _safe_float(value):
+
     try:
+
         number = float(value)
 
         if number != number:
             return None
 
         return number
-    except (TypeError, ValueError):
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
         return None
 
 
@@ -970,8 +986,11 @@ def _safe_float(value):
 async def get_live_analytics(
     userEmail: Optional[str] = None
 ):
+
     try:
+
         if not userEmail or not userEmail.strip():
+
             raise HTTPException(
                 status_code=400,
                 detail="userEmail is required"
@@ -1019,6 +1038,7 @@ async def get_live_analytics(
         missing_values = 0
 
         for review in reviews:
+
             text = str(
                 review.get("review") or ""
             ).strip()
@@ -1036,6 +1056,7 @@ async def get_live_analytics(
             )
 
             if rating is not None:
+
                 ratings.append(rating)
 
                 rating_key = (
@@ -1049,18 +1070,23 @@ async def get_live_analytics(
                 ] += 1
 
             if brand:
+
                 brand_distribution[
                     brand
                 ] += 1
 
             if product:
+
                 product_distribution[
                     product
                 ] += 1
 
             if not text:
+
                 missing_values += 1
+
             else:
+
                 review_lengths.append(
                     len(text)
                 )
@@ -1087,7 +1113,9 @@ async def get_live_analytics(
             )
 
             if emoji_matches:
+
                 emoji_review_count += 1
+
                 total_emoji_count += len(
                     emoji_matches
                 )
@@ -1097,17 +1125,24 @@ async def get_live_analytics(
                 )
 
             sentiment = _extract_review_sentiment(
-                review.get("nlpResults") or {}
+                review.get(
+                    "nlpResults"
+                ) or {}
             )
 
             if sentiment:
+
                 sentiment_distribution[
                     sentiment
                 ] += 1
 
         duplicate_count = (
             len(normalized_review_texts)
-            - len(set(normalized_review_texts))
+            - len(
+                set(
+                    normalized_review_texts
+                )
+            )
         )
 
         average_rating = (
@@ -1117,79 +1152,105 @@ async def get_live_analytics(
         )
 
         average_review_length = (
-            sum(review_lengths) /
-            len(review_lengths)
+            sum(review_lengths)
+            / len(review_lengths)
             if review_lengths
             else 0
         )
 
         return {
+
             "success": True,
+
             "source": "MongoDB",
+
             "userEmail": normalized_email,
+
             "totalReviews": total_reviews,
+
             "averageRating": round(
                 average_rating,
                 2
             ),
+
             "ratingDistribution": dict(
                 sorted(
                     rating_distribution.items(),
-                    key=lambda item: float(item[0])
+                    key=lambda item: float(
+                        item[0]
+                    )
                 )
             ),
+
             "sentimentDistribution": {
+
                 "Positive": sentiment_distribution.get(
                     "Positive",
                     0
                 ),
+
                 "Negative": sentiment_distribution.get(
                     "Negative",
                     0
                 ),
+
                 "Neutral": sentiment_distribution.get(
                     "Neutral",
                     0
                 )
             },
+
             "emojiReviewCount": (
                 emoji_review_count
             ),
+
             "totalEmojiCount": (
                 total_emoji_count
             ),
+
             "topEmojis": [
+
                 {
                     "emoji": emoji,
                     "count": count
                 }
+
                 for emoji, count
                 in emoji_counter.most_common(10)
             ],
+
             "brandDistribution": [
+
                 {
                     "brand": brand,
                     "count": count
                 }
+
                 for brand, count
                 in brand_distribution.most_common(10)
             ],
+
             "productDistribution": [
+
                 {
                     "product": product,
                     "count": count
                 }
+
                 for product, count
                 in product_distribution.most_common(10)
             ],
+
             "averageReviewLength": round(
                 average_review_length,
                 2
             ),
+
             "duplicateCount": max(
                 duplicate_count,
                 0
             ),
+
             "missingValues": missing_values
         }
 
@@ -1197,6 +1258,7 @@ async def get_live_analytics(
         raise
 
     except Exception as error:
+
         raise HTTPException(
             status_code=500,
             detail=str(error)
@@ -1216,7 +1278,9 @@ def get_model_results():
         "model_results.json"
     )
 
-    if not os.path.exists(results_path):
+    if not os.path.exists(
+        results_path
+    ):
 
         raise HTTPException(
             status_code=404,
